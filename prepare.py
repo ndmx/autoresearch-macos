@@ -55,6 +55,9 @@ VAL_SHARD = MAX_SHARD  # pinned validation shard (shard_06542)
 VAL_FILENAME = f"shard_{VAL_SHARD:05d}.parquet"
 VOCAB_SIZE = 8192
 
+# Custom corpus (set to a .txt path to skip parquet download and use local data)
+CUSTOM_CORPUS = "data/train_corpus.txt"
+
 # BPE split pattern (GPT-4 style, with \p{N}{1,2} instead of {1,3})
 SPLIT_PATTERN = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,2}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""
 
@@ -135,6 +138,20 @@ def list_parquet_files():
 
 def text_iterator(max_chars=1_000_000_000, doc_cap=10_000):
     """Yield documents from training split (all shards except pinned val shard)."""
+    if CUSTOM_CORPUS and os.path.exists(CUSTOM_CORPUS):
+        with open(CUSTOM_CORPUS, "r") as f:
+            raw = f.read()
+        split_point = int(len(raw) * 0.95)
+        train_text = raw[:split_point]
+        docs = [d.strip() for d in train_text.split("\n\n") if d.strip()]
+        nchars = 0
+        for doc in docs:
+            doc = doc[:doc_cap] if len(doc) > doc_cap else doc
+            nchars += len(doc)
+            yield doc
+            if nchars >= max_chars:
+                return
+        return
     parquet_paths = [p for p in list_parquet_files() if not p.endswith(VAL_FILENAME)]
     nchars = 0
     for filepath in parquet_paths:
@@ -142,7 +159,7 @@ def text_iterator(max_chars=1_000_000_000, doc_cap=10_000):
         for rg_idx in range(pf.num_row_groups):
             rg = pf.read_row_group(rg_idx)
             for text in rg.column("text").to_pylist():
-                doc = text[:doc_cap] if len(text) > doc_cap else text
+                doc = text[:doc_cap] if len(doc) > doc_cap else doc
                 nchars += len(doc)
                 yield doc
                 if nchars >= max_chars:
@@ -263,7 +280,19 @@ def get_token_bytes(device="cpu"):
 
 
 def _document_batches(split, tokenizer_batch_size=128):
-    """Infinite iterator over document batches from parquet files."""
+    """Infinite iterator over document batches from parquet files or custom corpus."""
+    if CUSTOM_CORPUS and os.path.exists(CUSTOM_CORPUS):
+        with open(CUSTOM_CORPUS, "r") as f:
+            raw = f.read()
+        split_point = int(len(raw) * 0.95)
+        text = raw[:split_point] if split == "train" else raw[split_point:]
+        docs = [d.strip() for d in text.split("\n\n") if d.strip()]
+        epoch = 1
+        while True:
+            for i in range(0, len(docs), tokenizer_batch_size):
+                yield docs[i:i+tokenizer_batch_size], epoch
+            epoch += 1
+        return
     parquet_paths = list_parquet_files()
     assert len(parquet_paths) > 0, "No parquet files found. Run prepare.py first."
     val_path = os.path.join(DATA_DIR, VAL_FILENAME)
@@ -393,8 +422,11 @@ if __name__ == "__main__":
     print(f"Cache directory: {CACHE_DIR}")
     print()
 
-    # Step 1: Download data
-    download_data(num_shards, download_workers=args.download_workers)
+    # Step 1: Download data (skipped if custom corpus is set)
+    if CUSTOM_CORPUS and os.path.exists(CUSTOM_CORPUS):
+        print(f"Custom corpus mode: using {CUSTOM_CORPUS} (skipping parquet download)")
+    else:
+        download_data(num_shards, download_workers=args.download_workers)
     print()
 
     # Step 2: Train tokenizer
