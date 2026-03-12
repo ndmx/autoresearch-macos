@@ -159,7 +159,7 @@ def text_iterator(max_chars=1_000_000_000, doc_cap=10_000):
         for rg_idx in range(pf.num_row_groups):
             rg = pf.read_row_group(rg_idx)
             for text in rg.column("text").to_pylist():
-                doc = text[:doc_cap] if len(doc) > doc_cap else doc
+                doc = text[:doc_cap] if len(text) > doc_cap else text
                 nchars += len(doc)
                 yield doc
                 if nchars >= max_chars:
@@ -177,8 +177,11 @@ def train_tokenizer():
 
     os.makedirs(TOKENIZER_DIR, exist_ok=True)
 
+    if CUSTOM_CORPUS and not os.path.exists(CUSTOM_CORPUS):
+        print(f"Tokenizer: CUSTOM_CORPUS is set to '{CUSTOM_CORPUS}' but file not found.")
+        sys.exit(1)
     parquet_files = list_parquet_files()
-    if len(parquet_files) < 2:
+    if not (CUSTOM_CORPUS and os.path.exists(CUSTOM_CORPUS)) and len(parquet_files) < 2:
         print("Tokenizer: need at least 2 data shards (1 train + 1 val). Download more data first.")
         sys.exit(1)
 
@@ -276,7 +279,7 @@ class Tokenizer:
 def get_token_bytes(device="cpu"):
     path = os.path.join(TOKENIZER_DIR, "token_bytes.pt")
     with open(path, "rb") as f:
-        return torch.load(f, map_location=device)
+        return torch.load(f, map_location=device, weights_only=True)
 
 
 def _document_batches(split, tokenizer_batch_size=128):
@@ -292,7 +295,6 @@ def _document_batches(split, tokenizer_batch_size=128):
             for i in range(0, len(docs), tokenizer_batch_size):
                 yield docs[i:i+tokenizer_batch_size], epoch
             epoch += 1
-        return
     parquet_paths = list_parquet_files()
     assert len(parquet_paths) > 0, "No parquet files found. Run prepare.py first."
     val_path = os.path.join(DATA_DIR, VAL_FILENAME)
