@@ -260,7 +260,7 @@ class GPT(nn.Module):
         }
 
     def setup_optimizer(self, unembedding_lr=0.004, embedding_lr=0.2, matrix_lr=0.02,
-                        weight_decay=0.0, adam_betas=(0.8, 0.95), scalar_lr=0.5, muon_beta2=0.95):
+                        weight_decay=0.0, adam_betas=(0.8, 0.95), scalar_lr=0.5, muon_beta2=0.95, muon_ns_steps=5):
         model_dim = self.config.n_embd
         matrix_params = list(self.transformer.h.parameters())
         value_embeds_params = list(self.value_embeds.parameters())
@@ -284,7 +284,7 @@ class GPT(nn.Module):
             group_params = [p for p in matrix_params if p.shape == shape]
             param_groups.append(dict(
                 kind='muon', params=group_params, lr=matrix_lr,
-                momentum=0.95, ns_steps=5, beta2=muon_beta2, weight_decay=weight_decay,
+                momentum=0.95, ns_steps=muon_ns_steps, beta2=muon_beta2, weight_decay=weight_decay,
             ))
         optimizer = MuonAdamW(param_groups)
         for group in optimizer.param_groups:
@@ -494,11 +494,13 @@ UNEMBEDDING_LR = 0.003  # learning rate for lm_head (Adam)
 MATRIX_LR = 0.025       # learning rate for matrix parameters (Muon)
 SCALAR_LR = 0.5         # learning rate for per-layer scalars (Adam)
 WEIGHT_DECAY = 0.2      # cautious weight decay for Muon
-ADAM_BETAS = (0.8, 0.98) # Adam beta1, beta2
+ADAM_BETAS = (0.78, 0.98) # Adam beta1, beta2
 MUON_BETA2 = 0.9         # Muon second moment EMA rate (default 0.95)
+MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
 WARMUP_RATIO = 0.0      # fraction of time budget for LR warmup
 WARMDOWN_RATIO = 0.27   # fraction of time budget for LR warmdown
 FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
+GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 
 # Model size
 DEPTH = 4               # number of transformer layers
@@ -571,6 +573,7 @@ optimizer = model.setup_optimizer(
     matrix_lr=MATRIX_LR,
     weight_decay=WEIGHT_DECAY,
     muon_beta2=MUON_BETA2,
+    muon_ns_steps=MUON_NS_STEPS,
 )
 
 # torch.compile is unstable on MPS, only use on CUDA
@@ -640,6 +643,8 @@ while True:
         if group['kind'] == 'muon':
             group["momentum"] = muon_momentum
             group["weight_decay"] = muon_weight_decay
+    if GRAD_CLIP > 0:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
     optimizer.step()
     model.zero_grad(set_to_none=True)
 
