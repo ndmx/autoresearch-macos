@@ -75,8 +75,10 @@ class CausalSelfAttention(nn.Module):
         self.c_k = nn.Linear(self.n_embd, self.n_kv_head * self.head_dim, bias=False)
         self.c_v = nn.Linear(self.n_embd, self.n_kv_head * self.head_dim, bias=False)
         self.c_proj = nn.Linear(self.n_embd, self.n_embd, bias=False)
-        self.ve_gate_channels = 32
+        self.ve_gate_channels = min(32, self.n_embd)
+        assert self.n_embd >= self.ve_gate_channels, f"n_embd ({self.n_embd}) must be >= ve_gate_channels ({self.ve_gate_channels})"
         self.ve_gate = nn.Linear(self.ve_gate_channels, self.n_kv_head, bias=False) if has_ve(layer_idx, config.n_layer) else None
+        self._window_mask_cache: dict = {}
 
     def forward(self, x, ve, cos_sin, window_size):
         B, T, C = x.size()
@@ -107,10 +109,11 @@ class CausalSelfAttention(nn.Module):
         # Apply mask for sliding window
         window = window_size[0]
         if window > 0 and window < T:
-            # Mask out tokens outside the window
-            mask = torch.ones(T, T, dtype=torch.bool, device=q.device).tril()
-            mask = mask.triu(diagonal=1 - window)
-            y = F.scaled_dot_product_attention(q, k, v, attn_mask=mask)
+            cache_key = (T, window, q.device)
+            if cache_key not in self._window_mask_cache:
+                mask = torch.ones(T, T, dtype=torch.bool, device=q.device).tril()
+                self._window_mask_cache[cache_key] = mask.triu(diagonal=1 - window)
+            y = F.scaled_dot_product_attention(q, k, v, attn_mask=self._window_mask_cache[cache_key])
         else:
             y = F.scaled_dot_product_attention(q, k, v, is_causal=True)
             
