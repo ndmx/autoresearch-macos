@@ -499,7 +499,7 @@ MUON_BETA2 = 0.9         # Muon second moment EMA rate (default 0.95)
 MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
 WARMUP_RATIO = 0.0      # fraction of time budget for LR warmup
 WARMDOWN_RATIO = 0.27   # fraction of time budget for LR warmdown
-FINAL_LR_FRAC = 0.04    # final LR as fraction of initial
+FINAL_LR_FRAC = 0.06    # final LR as fraction of initial
 GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 
 # Model size
