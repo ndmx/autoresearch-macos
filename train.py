@@ -484,8 +484,8 @@ class MuonAdamW(torch.optim.Optimizer):
 
 # Model architecture
 ASPECT_RATIO = 64       # model_dim = depth * ASPECT_RATIO
-HEAD_DIM = 128          # target head dimension for attention
-WINDOW_PATTERN = "SL"    # sliding window pattern: L=full, S=half context
+HEAD_DIM = 64          # target head dimension for attention
+WINDOW_PATTERN = "L"    # sliding window pattern: L=full, S=half context
 
 # Optimization
 TOTAL_BATCH_SIZE = 2**13 # ~8K tokens per optimizer step (batch=4, ~1000 steps)
@@ -504,7 +504,7 @@ GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
 
 # Model size
-DEPTH = 6               # number of transformer layers
+DEPTH = 5               # number of transformer layers
 DEVICE_BATCH_SIZE = 4   # per-device batch size (reduce if OOM)
 
 # ---------------------------------------------------------------------------
