@@ -495,7 +495,7 @@ MATRIX_LR = 0.025       # learning rate for matrix parameters (Muon)
 SCALAR_LR = 0.5         # learning rate for per-layer scalars (Adam)
 WEIGHT_DECAY = 0.10     # cautious weight decay for Muon (Phase 2 best: Exp132)
 ADAM_BETAS = (0.76, 0.98) # Adam beta1, beta2
-MUON_BETA2 = 0.95        # Muon second moment EMA rate (Phase 2 best: Exp132)
+MUON_BETA2 = 0.92        # Muon second moment EMA rate (Phase 2 best: Exp132)
 MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
 WARMUP_RATIO = 0.0      # fraction of time budget for LR warmup
 WARMDOWN_RATIO = 0.27   # fraction of time budget for LR warmdown
@@ -599,7 +599,7 @@ def get_lr_multiplier(progress):
         return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
 
 MUON_MOMENTUM_FINAL = 0.95  # final Muon momentum
-MUON_MOMENTUM_WARMUP = 100  # steps for Muon momentum ramp (default 300)
+MUON_MOMENTUM_WARMUP = 80  # steps for Muon momentum ramp (default 300)
 
 def get_muon_momentum(step):
     frac = min(step / MUON_MOMENTUM_WARMUP, 1)
