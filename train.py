@@ -493,7 +493,7 @@ EMBEDDING_LR = 0.5      # learning rate for token embeddings (Adam)
 UNEMBEDDING_LR = 0.003  # learning rate for lm_head (Adam)
 MATRIX_LR = 0.025       # learning rate for matrix parameters (Muon)
 SCALAR_LR = 0.5         # learning rate for per-layer scalars (Adam)
-WEIGHT_DECAY = 0.15     # cautious weight decay for Muon (Phase 1 best: Exp100)
+WEIGHT_DECAY = 0.05     # cautious weight decay for Muon (Phase 1 best: Exp100)
 ADAM_BETAS = (0.76, 0.98) # Adam beta1, beta2
 MUON_BETA2 = 0.9         # Muon second moment EMA rate (default 0.95)
 MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
@@ -596,8 +596,7 @@ def get_lr_multiplier(progress):
         return 1.0
     else:
         cooldown = (1.0 - progress) / WARMDOWN_RATIO
-        cosine_cooldown = (1 + math.cos(math.pi * (1 - cooldown))) / 2
-        return cosine_cooldown * 1.0 + (1 - cosine_cooldown) * FINAL_LR_FRAC
+        return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
 
 MUON_MOMENTUM_FINAL = 0.95  # final Muon momentum
 MUON_MOMENTUM_WARMUP = 100  # steps for Muon momentum ramp (default 300)
