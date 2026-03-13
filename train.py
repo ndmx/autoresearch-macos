@@ -500,7 +500,7 @@ MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
 WARMUP_RATIO = 0.0      # fraction of time budget for LR warmup
 WARMDOWN_RATIO = 0.27   # fraction of time budget for LR warmdown
 FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
-GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
+GRAD_CLIP = 5.0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
 
 # Model size
@@ -598,7 +598,7 @@ def get_lr_multiplier(progress):
         cooldown = (1.0 - progress) / WARMDOWN_RATIO
         return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
 
-MUON_MOMENTUM_FINAL = 0.97  # final Muon momentum
+MUON_MOMENTUM_FINAL = 0.95  # final Muon momentum
 MUON_MOMENTUM_WARMUP = 100  # steps for Muon momentum ramp (default 300)
 
 def get_muon_momentum(step):
