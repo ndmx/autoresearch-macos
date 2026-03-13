@@ -9,6 +9,7 @@ os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
 import gc
+import math
 import time
 from dataclasses import dataclass, asdict
 
@@ -305,10 +306,9 @@ class GPT(nn.Module):
             x = block(x, ve, cos_sin, self.window_sizes[i])
         x = norm(x)
 
-        softcap = 15
         logits = self.lm_head(x)
         logits = logits.float()
-        logits = softcap * torch.tanh(logits / softcap)
+        logits = SOFTCAP * torch.tanh(logits / SOFTCAP)
 
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1),
@@ -491,16 +491,17 @@ WINDOW_PATTERN = "L"    # sliding window pattern: L=full, S=half context
 TOTAL_BATCH_SIZE = 2**13 # ~8K tokens per optimizer step (batch=4, ~1000 steps)
 EMBEDDING_LR = 0.5      # learning rate for token embeddings (Adam)
 UNEMBEDDING_LR = 0.003  # learning rate for lm_head (Adam)
-MATRIX_LR = 0.030       # learning rate for matrix parameters (Muon)
+MATRIX_LR = 0.025       # learning rate for matrix parameters (Muon)
 SCALAR_LR = 0.5         # learning rate for per-layer scalars (Adam)
 WEIGHT_DECAY = 0.15     # cautious weight decay for Muon (Phase 1 best: Exp100)
 ADAM_BETAS = (0.76, 0.98) # Adam beta1, beta2
-MUON_BETA2 = 0.9         # Muon second moment EMA rate (default 0.95)
+MUON_BETA2 = 0.88         # Muon second moment EMA rate (default 0.95)
 MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
 WARMUP_RATIO = 0.0      # fraction of time budget for LR warmup
 WARMDOWN_RATIO = 0.27   # fraction of time budget for LR warmdown
 FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
 GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
+SOFTCAP = 15            # logit softcap value (tanh softcapping)
 
 # Model size
 DEPTH = 4               # number of transformer layers
