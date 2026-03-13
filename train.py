@@ -504,7 +504,7 @@ GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
 
 # Model size
-DEPTH = 4               # number of transformer layers
+DEPTH = 3               # number of transformer layers
 DEVICE_BATCH_SIZE = 4   # per-device batch size (reduce if OOM)
 
 # ---------------------------------------------------------------------------
