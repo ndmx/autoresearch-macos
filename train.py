@@ -598,11 +598,11 @@ def get_lr_multiplier(progress):
         return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
 
 MUON_MOMENTUM_FINAL = 0.95  # final Muon momentum
-MUON_MOMENTUM_WARMUP = 60  # steps for Muon momentum ramp (default 300)
+MUON_MOMENTUM_WARMUP = 100  # steps for Muon momentum ramp (default 300)
 
 def get_muon_momentum(step):
     frac = min(step / MUON_MOMENTUM_WARMUP, 1)
-    return (1 - frac) * 0.80 + frac * MUON_MOMENTUM_FINAL
+    return (1 - frac) * 0.75 + frac * MUON_MOMENTUM_FINAL
 
 def get_weight_decay(progress):
     return WEIGHT_DECAY * (1 - progress)
