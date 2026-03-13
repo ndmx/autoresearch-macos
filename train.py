@@ -603,7 +603,7 @@ MUON_MOMENTUM_WARMUP = 100  # steps for Muon momentum ramp (default 300)
 
 def get_muon_momentum(step):
     frac = min(step / MUON_MOMENTUM_WARMUP, 1)
-    return (1 - frac) * 0.75 + frac * MUON_MOMENTUM_FINAL
+    return (1 - frac) * 0.85 + frac * MUON_MOMENTUM_FINAL
 
 def get_weight_decay(progress):
     return WEIGHT_DECAY * (1 - progress)
