@@ -131,7 +131,7 @@ class MLP(nn.Module):
 
     def forward(self, x):
         x = self.c_fc(x)
-        x = F.silu(x)
+        x = F.relu(x).square()
         x = self.c_proj(x)
         return x
 
@@ -596,7 +596,8 @@ def get_lr_multiplier(progress):
         return 1.0
     else:
         cooldown = (1.0 - progress) / WARMDOWN_RATIO
-        return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
+        cosine_cooldown = (1 + math.cos(math.pi * (1 - cooldown))) / 2
+        return cosine_cooldown * 1.0 + (1 - cosine_cooldown) * FINAL_LR_FRAC
 
 MUON_MOMENTUM_FINAL = 0.95  # final Muon momentum
 MUON_MOMENTUM_WARMUP = 100  # steps for Muon momentum ramp (default 300)
