@@ -501,7 +501,7 @@ WARMUP_RATIO = 0.0      # fraction of time budget for LR warmup
 WARMDOWN_RATIO = 0.27   # fraction of time budget for LR warmdown
 FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
 GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
-SOFTCAP = 20            # logit softcap value (tanh softcapping)
+SOFTCAP = 12            # logit softcap value (tanh softcapping)
 
 # Model size
 DEPTH = 4               # number of transformer layers
