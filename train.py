@@ -45,6 +45,8 @@ class GPTConfig:
     window_pattern: str = "SSSL"
     mlp_ratio: int = 4
     ve_gate_channels: int = 32
+    rope_base: int = 10000
+    dropout: float = 0.0
 
 
 def norm(x):
@@ -143,10 +145,11 @@ class Block(nn.Module):
         super().__init__()
         self.attn = CausalSelfAttention(config, layer_idx)
         self.mlp = MLP(config)
+        self.drop = nn.Dropout(config.dropout)
 
     def forward(self, x, ve, cos_sin, window_size):
-        x = x + self.attn(norm(x), ve, cos_sin, window_size)
-        x = x + self.mlp(norm(x))
+        x = x + self.drop(self.attn(norm(x), ve, cos_sin, window_size))
+        x = x + self.drop(self.mlp(norm(x)))
         return x
 
 
@@ -209,7 +212,9 @@ class GPT(nn.Module):
         for ve in self.value_embeds.values():
             ve.to(dtype=torch.bfloat16)
 
-    def _precompute_rotary_embeddings(self, seq_len, head_dim, base=10000, device=None):
+    def _precompute_rotary_embeddings(self, seq_len, head_dim, base=None, device=None):
+        if base is None:
+            base = self.config.rope_base
         if device is None:
             device = self.transformer.wte.weight.device
         channel_range = torch.arange(0, head_dim, 2, dtype=torch.float32, device=device)
@@ -493,7 +498,7 @@ WINDOW_PATTERN = "SL"   # sliding window pattern: L=full, S=half context  [Phase
 # Optimization
 TOTAL_BATCH_SIZE = 8192 # ~8K tokens per optimizer step (batch=4, ~1000 steps)
 EMBEDDING_LR = 0.5      # learning rate for token embeddings (Adam)
-UNEMBEDDING_LR = 0.003  # learning rate for lm_head (Adam)
+UNEMBEDDING_LR = 0.004  # learning rate for lm_head (Adam)
 MATRIX_LR = 0.025       # learning rate for matrix parameters (Muon)
 SCALAR_LR = 0.5         # learning rate for per-layer scalars (Adam)
 WEIGHT_DECAY = 0.04     # cautious weight decay for Muon (Phase 3 best: Exp215)
@@ -507,7 +512,10 @@ GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
 LABEL_SMOOTHING = 0.0   # cross-entropy label smoothing (0 = disabled)
 MLP_RATIO = 4           # MLP hidden dimension multiplier (default 4x)
-VE_GATE_CHANNELS = 128   # value embedding gate channels (default 32)
+VE_GATE_CHANNELS = 32   # value embedding gate channels (default 32)
+ROPE_BASE = 10000       # RoPE positional encoding base frequency (default 10000)
+N_KV_HEAD = 2           # number of KV heads (1=MQA, =n_head for MHA)
+DROPOUT = 0.0           # residual dropout rate (0 = disabled)
 
 # Model size
 DEPTH = 3               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
@@ -546,12 +554,16 @@ def build_model_config(depth):
     base_dim = depth * ASPECT_RATIO
     model_dim = ((base_dim + HEAD_DIM - 1) // HEAD_DIM) * HEAD_DIM
     num_heads = model_dim // HEAD_DIM
+    n_kv = min(N_KV_HEAD, num_heads)
+    assert num_heads % n_kv == 0, f"N_KV_HEAD ({n_kv}) must divide n_head ({num_heads})"
     return GPTConfig(
         sequence_len=MAX_SEQ_LEN, vocab_size=vocab_size,
-        n_layer=depth, n_head=num_heads, n_kv_head=num_heads, n_embd=model_dim,
+        n_layer=depth, n_head=num_heads, n_kv_head=n_kv, n_embd=model_dim,
         window_pattern=WINDOW_PATTERN,
         mlp_ratio=MLP_RATIO,
         ve_gate_channels=VE_GATE_CHANNELS,
+        rope_base=ROPE_BASE,
+        dropout=DROPOUT,
     )
 
 config = build_model_config(DEPTH)
