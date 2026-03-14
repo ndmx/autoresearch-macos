@@ -48,6 +48,7 @@ class GPTConfig:
     rope_base: int = 10000
     dropout: float = 0.0
     swiglu: bool = False
+    parallel_attn: bool = False
 
 
 def norm(x):
@@ -150,10 +151,15 @@ class Block(nn.Module):
         self.attn = CausalSelfAttention(config, layer_idx)
         self.mlp = MLP(config)
         self.drop = nn.Dropout(config.dropout)
+        self.parallel_attn = config.parallel_attn
 
     def forward(self, x, ve, cos_sin, window_size):
-        x = x + self.drop(self.attn(norm(x), ve, cos_sin, window_size))
-        x = x + self.drop(self.mlp(norm(x)))
+        if self.parallel_attn:
+            normed = norm(x)
+            x = x + self.drop(self.attn(normed, ve, cos_sin, window_size)) + self.drop(self.mlp(normed))
+        else:
+            x = x + self.drop(self.attn(norm(x), ve, cos_sin, window_size))
+            x = x + self.drop(self.mlp(norm(x)))
         return x
 
 
@@ -510,7 +516,7 @@ SCALAR_LR = 0.5         # learning rate for per-layer scalars (Adam)
 WEIGHT_DECAY = 0.04     # cautious weight decay for Muon (Phase 3 best: Exp215)
 ADAM_BETAS = (0.76, 0.98) # Adam beta1, beta2
 MUON_BETA2 = 0.93        # Muon second moment EMA rate (Phase 3 best: Exp215)
-MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
+MUON_NS_STEPS = 3        # Newton-Schulz steps for Muon (default 5)
 WARMUP_RATIO = 0.0      # fraction of time budget for LR warmup
 WARMDOWN_RATIO = 0.31   # fraction of time budget for LR warmdown  [Phase 3 best]
 FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
@@ -523,7 +529,8 @@ ROPE_BASE = 10000       # RoPE positional encoding base frequency (default 10000
 N_KV_HEAD = 2           # number of KV heads (1=MQA, =n_head for MHA)
 DROPOUT = 0.0           # residual dropout rate (0 = disabled)
 SWIGLU = False          # SwiGLU MLP: silu(W1*x) * gate(x) instead of relu²(W1*x)
-EMA_DECAY = 0.99         # EMA weight averaging decay (0 = disabled; 0.99 = 100-step window)
+EMA_DECAY = 0.0         # EMA weight averaging decay (0 = disabled; 0.99 = 100-step window)
+PARALLEL_ATTN = False   # PaLM-style parallel attn+MLP: x = x + attn(norm(x)) + mlp(norm(x))
 
 # Model size
 DEPTH = 3               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
@@ -573,6 +580,7 @@ def build_model_config(depth):
         rope_base=ROPE_BASE,
         dropout=DROPOUT,
         swiglu=SWIGLU,
+        parallel_attn=PARALLEL_ATTN,
     )
 
 config = build_model_config(DEPTH)
