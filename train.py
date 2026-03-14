@@ -530,7 +530,7 @@ N_KV_HEAD = 2           # number of KV heads (1=MQA, =n_head for MHA)
 DROPOUT = 0.0           # residual dropout rate (0 = disabled)
 SWIGLU = False          # SwiGLU MLP: silu(W1*x) * gate(x) instead of relu²(W1*x)
 EMA_DECAY = 0.0         # EMA weight averaging decay (0 = disabled; 0.99 = 100-step window)
-PARALLEL_ATTN = True   # PaLM-style parallel attn+MLP: x = x + attn(norm(x)) + mlp(norm(x))
+PARALLEL_ATTN = False   # PaLM-style parallel attn+MLP: x = x + attn(norm(x)) + mlp(norm(x))
 
 # Model size
 DEPTH = 3               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
@@ -635,7 +635,7 @@ def get_lr_multiplier(progress):
         cooldown = (1.0 - progress) / WARMDOWN_RATIO
         return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
 
-MUON_MOMENTUM_FINAL = 0.95  # final Muon momentum
+MUON_MOMENTUM_FINAL = 0.94  # final Muon momentum
 MUON_MOMENTUM_WARMUP = 100  # steps for Muon momentum ramp (default 300)
 
 def get_muon_momentum(step):
