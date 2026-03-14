@@ -523,7 +523,7 @@ ROPE_BASE = 10000       # RoPE positional encoding base frequency (default 10000
 N_KV_HEAD = 2           # number of KV heads (1=MQA, =n_head for MHA)
 DROPOUT = 0.0           # residual dropout rate (0 = disabled)
 SWIGLU = False          # SwiGLU MLP: silu(W1*x) * gate(x) instead of relu²(W1*x)
-EMA_DECAY = 0.995         # EMA weight averaging decay (0 = disabled; 0.99 = 100-step window)
+EMA_DECAY = 0.99         # EMA weight averaging decay (0 = disabled; 0.99 = 100-step window)
 
 # Model size
 DEPTH = 3               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
