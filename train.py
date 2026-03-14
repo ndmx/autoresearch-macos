@@ -635,7 +635,7 @@ def get_lr_multiplier(progress):
         cooldown = (1.0 - progress) / WARMDOWN_RATIO
         return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
 
-MUON_MOMENTUM_FINAL = 0.94  # final Muon momentum
+MUON_MOMENTUM_FINAL = 0.93  # final Muon momentum
 MUON_MOMENTUM_WARMUP = 100  # steps for Muon momentum ramp (default 300)
 
 def get_muon_momentum(step):
@@ -765,3 +765,20 @@ print(f"total_tokens_M:   {total_tokens / 1e6:.1f}")
 print(f"num_steps:        {step}")
 print(f"num_params_M:     {num_params / 1e6:.1f}")
 print(f"depth:            {DEPTH}")
+
+# ---------------------------------------------------------------------------
+# Save checkpoint (always overwrites; caller decides whether run was good)
+# ---------------------------------------------------------------------------
+import dataclasses as _dc
+_ckpt = {
+    "model_state_dict": eval_model.state_dict(),
+    "config": _dc.asdict(config),          # full GPTConfig, enough to rebuild
+    "softcap": SOFTCAP,                    # needed in forward pass
+    "val_bpb": val_bpb,
+    "total_tokens": total_tokens,
+    "num_steps": step,
+    "time_budget_s": TIME_BUDGET,
+}
+_ckpt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_checkpoint.pt")
+torch.save(_ckpt, _ckpt_path)
+print(f"checkpoint:       {_ckpt_path}")
