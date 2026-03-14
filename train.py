@@ -505,7 +505,7 @@ WARMDOWN_RATIO = 0.31   # fraction of time budget for LR warmdown  [Phase 3 best
 FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
 GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
-LABEL_SMOOTHING = 0.10   # cross-entropy label smoothing (0 = disabled)
+LABEL_SMOOTHING = 0.15   # cross-entropy label smoothing (0 = disabled)
 MLP_RATIO = 4           # MLP hidden dimension multiplier (default 4x)
 VE_GATE_CHANNELS = 32   # value embedding gate channels (default 32)
 
