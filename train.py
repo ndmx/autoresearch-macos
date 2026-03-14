@@ -499,7 +499,7 @@ MUON_BETA2 = 0.93        # Muon second moment EMA rate (Phase 2 best: Exp132)
 MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
 WARMUP_RATIO = 0.0      # fraction of time budget for LR warmup
 WARMDOWN_RATIO = 0.31   # fraction of time budget for LR warmdown
-FINAL_LR_FRAC = 0.04    # final LR as fraction of initial
+FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
 GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
 
@@ -603,7 +603,7 @@ MUON_MOMENTUM_WARMUP = 100  # steps for Muon momentum ramp (default 300)
 
 def get_muon_momentum(step):
     frac = min(step / MUON_MOMENTUM_WARMUP, 1)
-    return (1 - frac) * 0.80 + frac * MUON_MOMENTUM_FINAL
+    return (1 - frac) * 0.75 + frac * MUON_MOMENTUM_FINAL
 
 def get_weight_decay(progress):
     return WEIGHT_DECAY * (1 - progress)
