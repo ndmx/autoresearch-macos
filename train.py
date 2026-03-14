@@ -517,7 +517,7 @@ FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
 GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
 LABEL_SMOOTHING = 0.0   # cross-entropy label smoothing (0 = disabled)
-MLP_RATIO = 3           # MLP hidden dimension multiplier (default 4x)
+MLP_RATIO = 2           # MLP hidden dimension multiplier (default 4x)
 VE_GATE_CHANNELS = 32   # value embedding gate channels (default 32)
 ROPE_BASE = 10000       # RoPE positional encoding base frequency (default 10000)
 N_KV_HEAD = 2           # number of KV heads (1=MQA, =n_head for MHA)
