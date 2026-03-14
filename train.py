@@ -43,6 +43,8 @@ class GPTConfig:
     n_kv_head: int = 6
     n_embd: int = 768
     window_pattern: str = "SSSL"
+    mlp_ratio: int = 4
+    ve_gate_channels: int = 32
 
 
 def norm(x):
@@ -76,7 +78,7 @@ class CausalSelfAttention(nn.Module):
         self.c_k = nn.Linear(self.n_embd, self.n_kv_head * self.head_dim, bias=False)
         self.c_v = nn.Linear(self.n_embd, self.n_kv_head * self.head_dim, bias=False)
         self.c_proj = nn.Linear(self.n_embd, self.n_embd, bias=False)
-        self.ve_gate_channels = min(32, self.n_embd)
+        self.ve_gate_channels = min(config.ve_gate_channels, self.n_embd)
         assert self.n_embd >= self.ve_gate_channels, f"n_embd ({self.n_embd}) must be >= ve_gate_channels ({self.ve_gate_channels})"
         self.ve_gate = nn.Linear(self.ve_gate_channels, self.n_kv_head, bias=False) if has_ve(layer_idx, config.n_layer) else None
         self._window_mask_cache: dict = {}
@@ -126,8 +128,8 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=False)
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=False)
+        self.c_fc = nn.Linear(config.n_embd, config.mlp_ratio * config.n_embd, bias=False)
+        self.c_proj = nn.Linear(config.mlp_ratio * config.n_embd, config.n_embd, bias=False)
 
     def forward(self, x):
         x = self.c_fc(x)
@@ -312,7 +314,8 @@ class GPT(nn.Module):
 
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1),
-                                   ignore_index=-1, reduction=reduction)
+                                   ignore_index=-1, reduction=reduction,
+                                   label_smoothing=LABEL_SMOOTHING if self.training else 0.0)
             return loss
         return logits
 
@@ -488,12 +491,12 @@ HEAD_DIM = 128          # target head dimension for attention
 WINDOW_PATTERN = "SL"   # sliding window pattern: L=full, S=half context  [Phase 3 best]
 
 # Optimization
-TOTAL_BATCH_SIZE = 4096 # ~8K tokens per optimizer step (batch=4, ~1000 steps)
+TOTAL_BATCH_SIZE = 8192 # ~8K tokens per optimizer step (batch=4, ~1000 steps)
 EMBEDDING_LR = 0.5      # learning rate for token embeddings (Adam)
 UNEMBEDDING_LR = 0.003  # learning rate for lm_head (Adam)
 MATRIX_LR = 0.025       # learning rate for matrix parameters (Muon)
 SCALAR_LR = 0.5         # learning rate for per-layer scalars (Adam)
-WEIGHT_DECAY = 0.03     # cautious weight decay for Muon (Phase 3 best: Exp215)
+WEIGHT_DECAY = 0.04     # cautious weight decay for Muon (Phase 3 best: Exp215)
 ADAM_BETAS = (0.76, 0.98) # Adam beta1, beta2
 MUON_BETA2 = 0.93        # Muon second moment EMA rate (Phase 3 best: Exp215)
 MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
@@ -502,10 +505,13 @@ WARMDOWN_RATIO = 0.31   # fraction of time budget for LR warmdown  [Phase 3 best
 FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
 GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
+LABEL_SMOOTHING = 0.05   # cross-entropy label smoothing (0 = disabled)
+MLP_RATIO = 4           # MLP hidden dimension multiplier (default 4x)
+VE_GATE_CHANNELS = 32   # value embedding gate channels (default 32)
 
 # Model size
 DEPTH = 3               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
-DEVICE_BATCH_SIZE = 2   # per-device batch size (reduce if OOM)
+DEVICE_BATCH_SIZE = 4   # per-device batch size (reduce if OOM)
 
 # ---------------------------------------------------------------------------
 # Setup: tokenizer, model, optimizer, dataloader
@@ -544,6 +550,8 @@ def build_model_config(depth):
         sequence_len=MAX_SEQ_LEN, vocab_size=vocab_size,
         n_layer=depth, n_head=num_heads, n_kv_head=num_heads, n_embd=model_dim,
         window_pattern=WINDOW_PATTERN,
+        mlp_ratio=MLP_RATIO,
+        ve_gate_channels=VE_GATE_CHANNELS,
     )
 
 config = build_model_config(DEPTH)
