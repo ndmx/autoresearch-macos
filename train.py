@@ -599,7 +599,7 @@ def get_lr_multiplier(progress):
         return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
 
 MUON_MOMENTUM_FINAL = 0.95  # final Muon momentum
-MUON_MOMENTUM_WARMUP = 120  # steps for Muon momentum ramp (default 300)
+MUON_MOMENTUM_WARMUP = 80  # steps for Muon momentum ramp (default 300)
 
 def get_muon_momentum(step):
     frac = min(step / MUON_MOMENTUM_WARMUP, 1)
