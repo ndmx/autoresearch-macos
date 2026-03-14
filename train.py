@@ -513,7 +513,7 @@ SOFTCAP = 15            # logit softcap value (tanh softcapping)
 LABEL_SMOOTHING = 0.0   # cross-entropy label smoothing (0 = disabled)
 MLP_RATIO = 4           # MLP hidden dimension multiplier (default 4x)
 VE_GATE_CHANNELS = 32   # value embedding gate channels (default 32)
-ROPE_BASE = 1000       # RoPE positional encoding base frequency (default 10000)
+ROPE_BASE = 50000       # RoPE positional encoding base frequency (default 10000)
 N_KV_HEAD = 2           # number of KV heads (1=MQA, =n_head for MHA)
 DROPOUT = 0.0           # residual dropout rate (0 = disabled)
 
