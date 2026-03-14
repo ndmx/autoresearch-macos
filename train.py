@@ -498,7 +498,7 @@ WINDOW_PATTERN = "SL"   # sliding window pattern: L=full, S=half context  [Phase
 # Optimization
 TOTAL_BATCH_SIZE = 8192 # ~8K tokens per optimizer step (batch=4, ~1000 steps)
 EMBEDDING_LR = 0.5      # learning rate for token embeddings (Adam)
-UNEMBEDDING_LR = 0.0035  # learning rate for lm_head (Adam)
+UNEMBEDDING_LR = 0.003  # learning rate for lm_head (Adam)
 MATRIX_LR = 0.025       # learning rate for matrix parameters (Muon)
 SCALAR_LR = 0.5         # learning rate for per-layer scalars (Adam)
 WEIGHT_DECAY = 0.04     # cautious weight decay for Muon (Phase 3 best: Exp215)
@@ -513,7 +513,7 @@ SOFTCAP = 15            # logit softcap value (tanh softcapping)
 LABEL_SMOOTHING = 0.0   # cross-entropy label smoothing (0 = disabled)
 MLP_RATIO = 4           # MLP hidden dimension multiplier (default 4x)
 VE_GATE_CHANNELS = 32   # value embedding gate channels (default 32)
-ROPE_BASE = 10000       # RoPE positional encoding base frequency (default 10000)
+ROPE_BASE = 1000       # RoPE positional encoding base frequency (default 10000)
 N_KV_HEAD = 2           # number of KV heads (1=MQA, =n_head for MHA)
 DROPOUT = 0.0           # residual dropout rate (0 = disabled)
 
