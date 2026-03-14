@@ -506,7 +506,7 @@ FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
 GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
 LABEL_SMOOTHING = 0.0   # cross-entropy label smoothing (0 = disabled)
-MLP_RATIO = 6           # MLP hidden dimension multiplier (default 4x)
+MLP_RATIO = 8           # MLP hidden dimension multiplier (default 4x)
 VE_GATE_CHANNELS = 32   # value embedding gate channels (default 32)
 
 # Model size
