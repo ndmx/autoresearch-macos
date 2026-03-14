@@ -516,7 +516,7 @@ SCALAR_LR = 0.5         # learning rate for per-layer scalars (Adam)
 WEIGHT_DECAY = 0.04     # cautious weight decay for Muon (Phase 3 best: Exp215)
 ADAM_BETAS = (0.76, 0.98) # Adam beta1, beta2
 MUON_BETA2 = 0.93        # Muon second moment EMA rate (Phase 3 best: Exp215)
-MUON_NS_STEPS = 10        # Newton-Schulz steps for Muon (default 5)
+MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
 WARMUP_RATIO = 0.0      # fraction of time budget for LR warmup
 WARMDOWN_RATIO = 0.31   # fraction of time budget for LR warmdown  [Phase 3 best]
 FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
@@ -530,7 +530,7 @@ N_KV_HEAD = 2           # number of KV heads (1=MQA, =n_head for MHA)
 DROPOUT = 0.0           # residual dropout rate (0 = disabled)
 SWIGLU = False          # SwiGLU MLP: silu(W1*x) * gate(x) instead of relu²(W1*x)
 EMA_DECAY = 0.0         # EMA weight averaging decay (0 = disabled; 0.99 = 100-step window)
-PARALLEL_ATTN = False   # PaLM-style parallel attn+MLP: x = x + attn(norm(x)) + mlp(norm(x))
+PARALLEL_ATTN = True   # PaLM-style parallel attn+MLP: x = x + attn(norm(x)) + mlp(norm(x))
 
 # Model size
 DEPTH = 3               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
