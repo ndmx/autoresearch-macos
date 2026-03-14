@@ -495,11 +495,11 @@ MATRIX_LR = 0.025       # learning rate for matrix parameters (Muon)
 SCALAR_LR = 0.5         # learning rate for per-layer scalars (Adam)
 WEIGHT_DECAY = 0.04     # cautious weight decay for Muon (Phase 2 best: Exp132)
 ADAM_BETAS = (0.76, 0.98) # Adam beta1, beta2
-MUON_BETA2 = 0.95        # Muon second moment EMA rate (Phase 2 best: Exp132)
+MUON_BETA2 = 0.92        # Muon second moment EMA rate (Phase 2 best: Exp132)
 MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
 WARMUP_RATIO = 0.0      # fraction of time budget for LR warmup
 WARMDOWN_RATIO = 0.30   # fraction of time budget for LR warmdown
-FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
+FINAL_LR_FRAC = 0.03    # final LR as fraction of initial
 GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
 
