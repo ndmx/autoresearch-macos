@@ -47,6 +47,7 @@ class GPTConfig:
     ve_gate_channels: int = 32
     rope_base: int = 10000
     dropout: float = 0.0
+    swiglu: bool = False
 
 
 def norm(x):
@@ -132,10 +133,13 @@ class MLP(nn.Module):
         super().__init__()
         self.c_fc = nn.Linear(config.n_embd, config.mlp_ratio * config.n_embd, bias=False)
         self.c_proj = nn.Linear(config.mlp_ratio * config.n_embd, config.n_embd, bias=False)
+        self.c_gate = nn.Linear(config.n_embd, config.mlp_ratio * config.n_embd, bias=False) if config.swiglu else None
 
     def forward(self, x):
-        x = self.c_fc(x)
-        x = F.relu(x).square()
+        if self.c_gate is not None:
+            x = F.silu(self.c_fc(x)) * self.c_gate(x)
+        else:
+            x = F.relu(self.c_fc(x)).square()
         x = self.c_proj(x)
         return x
 
@@ -193,6 +197,8 @@ class GPT(nn.Module):
             torch.nn.init.zeros_(block.attn.c_proj.weight)
             torch.nn.init.uniform_(block.mlp.c_fc.weight, -s, s)
             torch.nn.init.zeros_(block.mlp.c_proj.weight)
+            if block.mlp.c_gate is not None:
+                torch.nn.init.uniform_(block.mlp.c_gate.weight, -s, s)
         # Per-layer scalars
         self.resid_lambdas.fill_(1.0)
         self.x0_lambdas.fill_(0.1)
@@ -515,7 +521,9 @@ MLP_RATIO = 4           # MLP hidden dimension multiplier (default 4x)
 VE_GATE_CHANNELS = 32   # value embedding gate channels (default 32)
 ROPE_BASE = 10000       # RoPE positional encoding base frequency (default 10000)
 N_KV_HEAD = 2           # number of KV heads (1=MQA, =n_head for MHA)
-DROPOUT = 0.05           # residual dropout rate (0 = disabled)
+DROPOUT = 0.10           # residual dropout rate (0 = disabled)
+SWIGLU = False          # SwiGLU MLP: silu(W1*x) * gate(x) instead of relu²(W1*x)
+EMA_DECAY = 0.0         # EMA weight averaging decay (0 = disabled; 0.99 = 100-step window)
 
 # Model size
 DEPTH = 3               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
@@ -564,6 +572,7 @@ def build_model_config(depth):
         ve_gate_channels=VE_GATE_CHANNELS,
         rope_base=ROPE_BASE,
         dropout=DROPOUT,
+        swiglu=SWIGLU,
     )
 
 config = build_model_config(DEPTH)
@@ -637,6 +646,13 @@ smooth_train_loss = 0
 total_training_time = 0
 step = 0
 
+# EMA weight averaging (optional)
+ema_model = None
+if EMA_DECAY > 0.0:
+    import copy
+    ema_model = copy.deepcopy(model)
+    ema_model.eval()
+
 def sync_device(device_type):
     if device_type == "cuda":
         torch.cuda.synchronize()
@@ -668,6 +684,10 @@ while True:
         torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
     optimizer.step()
     model.zero_grad(set_to_none=True)
+    if ema_model is not None:
+        with torch.no_grad():
+            for p_ema, p in zip(ema_model.parameters(), model.parameters()):
+                p_ema.lerp_(p, 1.0 - EMA_DECAY)
 
     train_loss_f = train_loss.item()
 
@@ -715,7 +735,8 @@ total_tokens = step * TOTAL_BATCH_SIZE
 # Final eval
 model.eval()
 with autocast_ctx:
-    val_bpb = evaluate_bpb(model, tokenizer, DEVICE_BATCH_SIZE)
+    eval_model = ema_model if ema_model is not None else model
+    val_bpb = evaluate_bpb(eval_model, tokenizer, DEVICE_BATCH_SIZE)
 
 # Final summary
 t_end = time.time()
