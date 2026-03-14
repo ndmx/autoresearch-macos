@@ -507,7 +507,7 @@ GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
 LABEL_SMOOTHING = 0.0   # cross-entropy label smoothing (0 = disabled)
 MLP_RATIO = 4           # MLP hidden dimension multiplier (default 4x)
-VE_GATE_CHANNELS = 64   # value embedding gate channels (default 32)
+VE_GATE_CHANNELS = 128   # value embedding gate channels (default 32)
 
 # Model size
 DEPTH = 3               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
