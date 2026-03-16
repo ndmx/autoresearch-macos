@@ -515,7 +515,7 @@ MATRIX_LR = 0.025       # learning rate for matrix parameters (Muon)
 SCALAR_LR = 0.5         # learning rate for per-layer scalars (Adam)
 WEIGHT_DECAY = 0.04     # cautious weight decay for Muon (Phase 3 best: Exp215)
 ADAM_BETAS = (0.76, 0.98) # Adam beta1, beta2
-MUON_BETA2 = 0.95        # Muon second moment EMA rate (Phase 3 best: Exp215)
+MUON_BETA2 = 0.90        # Muon second moment EMA rate (Phase 3 best: Exp215)
 MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
 WARMUP_RATIO = 0.02     # fraction of time budget for LR warmup (~288s = ~4.8 min ramp)
 WARMDOWN_RATIO = 0.50   # fraction of time budget for LR warmdown  [Phase 11 best: Exp324]
