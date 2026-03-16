@@ -517,8 +517,8 @@ WEIGHT_DECAY = 0.04     # cautious weight decay for Muon (Phase 3 best: Exp215)
 ADAM_BETAS = (0.76, 0.98) # Adam beta1, beta2
 MUON_BETA2 = 0.93        # Muon second moment EMA rate (Phase 3 best: Exp215)
 MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
-WARMUP_RATIO = 0.05     # fraction of time budget for LR warmup (~288s = ~4.8 min ramp)
-WARMDOWN_RATIO = 0.50   # fraction of time budget for LR warmdown  [Phase 11 best: Exp324]
+WARMUP_RATIO = 0.02     # fraction of time budget for LR warmup (~288s = ~4.8 min ramp)
+WARMDOWN_RATIO = 0.40   # fraction of time budget for LR warmdown  [Phase 11 best: Exp324]
 FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
 GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
@@ -533,7 +533,7 @@ EMA_DECAY = 0.0         # EMA weight averaging decay (0 = disabled; 0.99 = 100-s
 PARALLEL_ATTN = False   # PaLM-style parallel attn+MLP: x = x + attn(norm(x)) + mlp(norm(x))
 
 # Model size
-DEPTH = 3               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
+DEPTH = 4               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
 DEVICE_BATCH_SIZE = 4   # per-device batch size (reduce if OOM)
 
 # Checkpoint resume
