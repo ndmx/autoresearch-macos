@@ -517,9 +517,9 @@ WEIGHT_DECAY = 0.04     # cautious weight decay for Muon (Phase 3 best: Exp215)
 ADAM_BETAS = (0.76, 0.98) # Adam beta1, beta2
 MUON_BETA2 = 0.93        # Muon second moment EMA rate (Phase 3 best: Exp215)
 MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
-WARMUP_RATIO = 0.0      # fraction of time budget for LR warmup
-WARMDOWN_RATIO = 0.35   # fraction of time budget for LR warmdown  [Phase 3 best]
-FINAL_LR_FRAC = 0.02    # final LR as fraction of initial
+WARMUP_RATIO = 0.02     # fraction of time budget for LR warmup (~288s = ~4.8 min ramp)
+WARMDOWN_RATIO = 0.50   # fraction of time budget for LR warmdown  [Phase 11 best: Exp324]
+FINAL_LR_FRAC = 0.05    # final LR as fraction of initial
 GRAD_CLIP = 0           # gradient clipping max norm (0 = no clipping)
 SOFTCAP = 15            # logit softcap value (tanh softcapping)
 LABEL_SMOOTHING = 0.0   # cross-entropy label smoothing (0 = disabled)
@@ -536,249 +536,294 @@ PARALLEL_ATTN = False   # PaLM-style parallel attn+MLP: x = x + attn(norm(x)) + 
 DEPTH = 3               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
 DEVICE_BATCH_SIZE = 4   # per-device batch size (reduce if OOM)
 
+# Checkpoint resume
+CHECKPOINT_EVERY_S = 1800   # save mid-training checkpoint every 30 minutes
+RESUME_CHECKPOINT = True    # auto-resume from training_checkpoint.pt if it exists
+
 # ---------------------------------------------------------------------------
 # Setup: tokenizer, model, optimizer, dataloader
 # ---------------------------------------------------------------------------
 
-t_start = time.time()
-torch.manual_seed(42)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed(42)
-torch.set_float32_matmul_precision("high")
+if __name__ == "__main__":
+    t_start = time.time()
+    torch.manual_seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(42)
+    torch.set_float32_matmul_precision("high")
 
-# Detect device
-device_type = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-device = torch.device(device_type)
+    # Detect device
+    device_type = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+    device = torch.device(device_type)
 
-# Autocast context
-if device_type == "cuda":
-    autocast_ctx = torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16)
-elif device_type == "cpu":
-    autocast_ctx = torch.amp.autocast(device_type="cpu", dtype=torch.bfloat16)
-else:
-    import contextlib
-    autocast_ctx = contextlib.nullcontext()
+    # Autocast context
+    if device_type == "cuda":
+        autocast_ctx = torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16)
+    elif device_type == "cpu":
+        autocast_ctx = torch.amp.autocast(device_type="cpu", dtype=torch.bfloat16)
+    else:
+        import contextlib
+        autocast_ctx = contextlib.nullcontext()
 
-H100_BF16_PEAK_FLOPS = 989.5e12
+    H100_BF16_PEAK_FLOPS = 989.5e12
 
-tokenizer = Tokenizer.from_directory()
-vocab_size = tokenizer.get_vocab_size()
-print(f"Vocab size: {vocab_size:,}")
+    tokenizer = Tokenizer.from_directory()
+    vocab_size = tokenizer.get_vocab_size()
+    print(f"Vocab size: {vocab_size:,}")
 
-def build_model_config(depth):
-    base_dim = depth * ASPECT_RATIO
-    model_dim = ((base_dim + HEAD_DIM - 1) // HEAD_DIM) * HEAD_DIM
-    num_heads = model_dim // HEAD_DIM
-    n_kv = min(N_KV_HEAD, num_heads)
-    assert num_heads % n_kv == 0, f"N_KV_HEAD ({n_kv}) must divide n_head ({num_heads})"
-    return GPTConfig(
-        sequence_len=MAX_SEQ_LEN, vocab_size=vocab_size,
-        n_layer=depth, n_head=num_heads, n_kv_head=n_kv, n_embd=model_dim,
-        window_pattern=WINDOW_PATTERN,
-        mlp_ratio=MLP_RATIO,
-        ve_gate_channels=VE_GATE_CHANNELS,
-        rope_base=ROPE_BASE,
-        dropout=DROPOUT,
-        swiglu=SWIGLU,
-        parallel_attn=PARALLEL_ATTN,
+    def build_model_config(depth):
+        base_dim = depth * ASPECT_RATIO
+        model_dim = ((base_dim + HEAD_DIM - 1) // HEAD_DIM) * HEAD_DIM
+        num_heads = model_dim // HEAD_DIM
+        n_kv = min(N_KV_HEAD, num_heads)
+        assert num_heads % n_kv == 0, f"N_KV_HEAD ({n_kv}) must divide n_head ({num_heads})"
+        return GPTConfig(
+            sequence_len=MAX_SEQ_LEN, vocab_size=vocab_size,
+            n_layer=depth, n_head=num_heads, n_kv_head=n_kv, n_embd=model_dim,
+            window_pattern=WINDOW_PATTERN,
+            mlp_ratio=MLP_RATIO,
+            ve_gate_channels=VE_GATE_CHANNELS,
+            rope_base=ROPE_BASE,
+            dropout=DROPOUT,
+            swiglu=SWIGLU,
+            parallel_attn=PARALLEL_ATTN,
+        )
+
+    config = build_model_config(DEPTH)
+    print(f"Model config: {asdict(config)}")
+
+    with torch.device("meta"):
+        model = GPT(config)
+    model.to_empty(device=device)
+    model.init_weights()
+
+    param_counts = model.num_scaling_params()
+    print("Parameter counts:")
+    for key, value in param_counts.items():
+        print(f"  {key:24s}: {value:,}")
+    num_params = param_counts['total']
+    num_flops_per_token = model.estimate_flops()
+    print(f"Estimated FLOPs per token: {num_flops_per_token:e}")
+
+    tokens_per_fwdbwd = DEVICE_BATCH_SIZE * MAX_SEQ_LEN
+    assert TOTAL_BATCH_SIZE % tokens_per_fwdbwd == 0
+    grad_accum_steps = TOTAL_BATCH_SIZE // tokens_per_fwdbwd
+
+    optimizer = model.setup_optimizer(
+        unembedding_lr=UNEMBEDDING_LR,
+        embedding_lr=EMBEDDING_LR,
+        scalar_lr=SCALAR_LR,
+        adam_betas=ADAM_BETAS,
+        matrix_lr=MATRIX_LR,
+        weight_decay=WEIGHT_DECAY,
+        muon_beta2=MUON_BETA2,
+        muon_ns_steps=MUON_NS_STEPS,
     )
 
-config = build_model_config(DEPTH)
-print(f"Model config: {asdict(config)}")
-
-with torch.device("meta"):
-    model = GPT(config)
-model.to_empty(device=device)
-model.init_weights()
-
-param_counts = model.num_scaling_params()
-print("Parameter counts:")
-for key, value in param_counts.items():
-    print(f"  {key:24s}: {value:,}")
-num_params = param_counts['total']
-num_flops_per_token = model.estimate_flops()
-print(f"Estimated FLOPs per token: {num_flops_per_token:e}")
-
-tokens_per_fwdbwd = DEVICE_BATCH_SIZE * MAX_SEQ_LEN
-assert TOTAL_BATCH_SIZE % tokens_per_fwdbwd == 0
-grad_accum_steps = TOTAL_BATCH_SIZE // tokens_per_fwdbwd
-
-optimizer = model.setup_optimizer(
-    unembedding_lr=UNEMBEDDING_LR,
-    embedding_lr=EMBEDDING_LR,
-    scalar_lr=SCALAR_LR,
-    adam_betas=ADAM_BETAS,
-    matrix_lr=MATRIX_LR,
-    weight_decay=WEIGHT_DECAY,
-    muon_beta2=MUON_BETA2,
-    muon_ns_steps=MUON_NS_STEPS,
-)
-
-# torch.compile is unstable on MPS, only use on CUDA
-if device_type == "cuda":
-    model = torch.compile(model, dynamic=False)
-
-train_loader = make_dataloader(tokenizer, DEVICE_BATCH_SIZE, MAX_SEQ_LEN, "train")
-x, y, epoch = next(train_loader)  # prefetch first batch
-
-print(f"Time budget: {TIME_BUDGET}s")
-print(f"Gradient accumulation steps: {grad_accum_steps}")
-
-# Schedules (all based on progress = training_time / TIME_BUDGET)
-
-def get_lr_multiplier(progress):
-    if progress < WARMUP_RATIO:
-        return progress / WARMUP_RATIO if WARMUP_RATIO > 0 else 1.0
-    elif progress < 1.0 - WARMDOWN_RATIO:
-        return 1.0
-    else:
-        cooldown = (1.0 - progress) / WARMDOWN_RATIO
-        return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
-
-MUON_MOMENTUM_FINAL = 0.95  # final Muon momentum
-MUON_MOMENTUM_WARMUP = 100  # steps for Muon momentum ramp (default 300)
-
-def get_muon_momentum(step):
-    frac = min(step / MUON_MOMENTUM_WARMUP, 1)
-    return (1 - frac) * 0.80 + frac * MUON_MOMENTUM_FINAL
-
-def get_weight_decay(progress):
-    return WEIGHT_DECAY * (1 - progress)
-
-# ---------------------------------------------------------------------------
-# Training loop
-# ---------------------------------------------------------------------------
-
-t_start_training = time.time()
-smooth_train_loss = 0
-total_training_time = 0
-step = 0
-
-# EMA weight averaging (optional)
-ema_model = None
-if EMA_DECAY > 0.0:
-    import copy
-    ema_model = copy.deepcopy(model)
-    ema_model.eval()
-
-def sync_device(device_type):
+    # torch.compile is unstable on MPS, only use on CUDA
     if device_type == "cuda":
-        torch.cuda.synchronize()
-    elif device_type == "mps":
-        torch.mps.synchronize()
+        model = torch.compile(model, dynamic=False)
 
-while True:
-    sync_device(device_type)
-    t0 = time.time()
-    for micro_step in range(grad_accum_steps):
-        with autocast_ctx:
-            loss = model(x, y)
-        train_loss = loss.detach()
-        loss = loss / grad_accum_steps
-        loss.backward()
-        x, y, epoch = next(train_loader)
+    train_loader = make_dataloader(tokenizer, DEVICE_BATCH_SIZE, MAX_SEQ_LEN, "train")
+    x, y, epoch = next(train_loader)  # prefetch first batch
 
-    # Progress and schedules
-    progress = min(total_training_time / TIME_BUDGET, 1.0)
-    lrm = get_lr_multiplier(progress)
-    muon_momentum = get_muon_momentum(step)
-    muon_weight_decay = get_weight_decay(progress)
-    for group in optimizer.param_groups:
-        group["lr"] = group["initial_lr"] * lrm
-        if group['kind'] == 'muon':
-            group["momentum"] = muon_momentum
-            group["weight_decay"] = muon_weight_decay
-    if GRAD_CLIP > 0:
-        torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
-    optimizer.step()
-    model.zero_grad(set_to_none=True)
-    if ema_model is not None:
-        with torch.no_grad():
-            for p_ema, p in zip(ema_model.parameters(), model.parameters()):
-                p_ema.lerp_(p, 1.0 - EMA_DECAY)
+    print(f"Time budget: {TIME_BUDGET}s")
+    print(f"Gradient accumulation steps: {grad_accum_steps}")
 
-    train_loss_f = train_loss.item()
-
-    # Fast fail: abort if loss is exploding
-    if train_loss_f > 100:
-        print("FAIL")
-        exit(1)
-
-    sync_device(device_type)
-    t1 = time.time()
-    dt = t1 - t0
-
-    if step > 10:
-        total_training_time += dt
-
-    # Logging
-    ema_beta = 0.9
-    smooth_train_loss = ema_beta * smooth_train_loss + (1 - ema_beta) * train_loss_f
-    debiased_smooth_loss = smooth_train_loss / (1 - ema_beta**(step + 1))
-    pct_done = 100 * progress
-    tok_per_sec = int(TOTAL_BATCH_SIZE / dt)
-    mfu = 100 * num_flops_per_token * TOTAL_BATCH_SIZE / dt / H100_BF16_PEAK_FLOPS
-    remaining = max(0, TIME_BUDGET - total_training_time)
-
-    print(f"\rstep {step:05d} ({pct_done:.1f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt*1000:.0f}ms | tok/sec: {tok_per_sec:,} | mfu: {mfu:.1f}% | epoch: {epoch} | remaining: {remaining:.0f}s    ", end="", flush=True)
-
-    # GC management (Python's GC causes ~500ms stalls)
-    if step == 0:
+    # ---------------------------------------------------------------------------
+    # Checkpoint resume
+    # ---------------------------------------------------------------------------
+    _resume_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "training_checkpoint.pt")
+    _step_init = 0
+    _time_init = 0.0
+    _loss_init = 0.0
+    if RESUME_CHECKPOINT and os.path.exists(_resume_path):
+        print(f"Resuming from: {_resume_path}")
+        _resume = torch.load(_resume_path, map_location=device, weights_only=False)
+        model.load_state_dict(_resume["model_state_dict"])
+        optimizer.load_state_dict(_resume["optimizer_state_dict"])
+        _step_init = _resume["step"]
+        _time_init = _resume["total_training_time"]
+        _loss_init = _resume["smooth_train_loss"]
+        print(f"  step={_step_init}  elapsed={_time_init:.0f}s  remaining={max(0, TIME_BUDGET - _time_init):.0f}s")
+        del _resume
+        # Freeze GC now since we're skipping step 0
         gc.collect()
         gc.freeze()
         gc.disable()
-    elif (step + 1) % 5000 == 0:
-        gc.collect()
 
-    step += 1
+    # Schedules (all based on progress = training_time / TIME_BUDGET)
 
-    # Time's up — but only stop after warmup steps so we don't count compilation
-    if step > 10 and total_training_time >= TIME_BUDGET:
-        break
+    def get_lr_multiplier(progress):
+        if progress < WARMUP_RATIO:
+            return progress / WARMUP_RATIO if WARMUP_RATIO > 0 else 1.0
+        elif progress < 1.0 - WARMDOWN_RATIO:
+            return 1.0
+        else:
+            cooldown = (1.0 - progress) / WARMDOWN_RATIO
+            return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
 
-print()  # newline after \r training log
+    MUON_MOMENTUM_FINAL = 0.95  # final Muon momentum
+    MUON_MOMENTUM_WARMUP = 100  # steps for Muon momentum ramp (default 300)
 
-total_tokens = step * TOTAL_BATCH_SIZE
+    def get_muon_momentum(step):
+        frac = min(step / MUON_MOMENTUM_WARMUP, 1)
+        return (1 - frac) * 0.80 + frac * MUON_MOMENTUM_FINAL
 
-# Final eval
-model.eval()
-with autocast_ctx:
-    eval_model = ema_model if ema_model is not None else model
-    val_bpb = evaluate_bpb(eval_model, tokenizer, DEVICE_BATCH_SIZE)
+    def get_weight_decay(progress):
+        return WEIGHT_DECAY * (1 - progress)
 
-# Final summary
-t_end = time.time()
-startup_time = t_start_training - t_start
-steady_state_mfu = 100 * num_flops_per_token * TOTAL_BATCH_SIZE * (step - 10) / total_training_time / H100_BF16_PEAK_FLOPS if total_training_time > 0 else 0
-if device_type == "cuda":
-    peak_vram_mb = torch.cuda.max_memory_allocated() / 1024 / 1024
-else:
-    peak_vram_mb = 0.0
+    # ---------------------------------------------------------------------------
+    # Training loop
+    # ---------------------------------------------------------------------------
 
-print("---")
-print(f"val_bpb:          {val_bpb:.6f}")
-print(f"training_seconds: {total_training_time:.1f}")
-print(f"total_seconds:    {t_end - t_start:.1f}")
-print(f"peak_vram_mb:     {peak_vram_mb:.1f}")
-print(f"mfu_percent:      {steady_state_mfu:.2f}")
-print(f"total_tokens_M:   {total_tokens / 1e6:.1f}")
-print(f"num_steps:        {step}")
-print(f"num_params_M:     {num_params / 1e6:.1f}")
-print(f"depth:            {DEPTH}")
+    t_start_training = time.time()
+    smooth_train_loss = _loss_init
+    total_training_time = _time_init
+    step = _step_init
+    _last_ckpt_wall = time.time()
 
-# ---------------------------------------------------------------------------
-# Save checkpoint (always overwrites; caller decides whether run was good)
-# ---------------------------------------------------------------------------
-import dataclasses as _dc
-_ckpt = {
-    "model_state_dict": eval_model.state_dict(),
-    "config": _dc.asdict(config),          # full GPTConfig, enough to rebuild
-    "softcap": SOFTCAP,                    # needed in forward pass
-    "val_bpb": val_bpb,
-    "total_tokens": total_tokens,
-    "num_steps": step,
-    "time_budget_s": TIME_BUDGET,
-}
-_ckpt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_checkpoint.pt")
-torch.save(_ckpt, _ckpt_path)
-print(f"checkpoint:       {_ckpt_path}")
+    # EMA weight averaging (optional)
+    ema_model = None
+    if EMA_DECAY > 0.0:
+        import copy
+        ema_model = copy.deepcopy(model)
+        ema_model.eval()
+
+    def sync_device(device_type):
+        if device_type == "cuda":
+            torch.cuda.synchronize()
+        elif device_type == "mps":
+            torch.mps.synchronize()
+
+    while True:
+        sync_device(device_type)
+        t0 = time.time()
+        for micro_step in range(grad_accum_steps):
+            with autocast_ctx:
+                loss = model(x, y)
+            train_loss = loss.detach()
+            loss = loss / grad_accum_steps
+            loss.backward()
+            x, y, epoch = next(train_loader)
+
+        # Progress and schedules
+        progress = min(total_training_time / TIME_BUDGET, 1.0)
+        lrm = get_lr_multiplier(progress)
+        muon_momentum = get_muon_momentum(step)
+        muon_weight_decay = get_weight_decay(progress)
+        for group in optimizer.param_groups:
+            group["lr"] = group["initial_lr"] * lrm
+            if group['kind'] == 'muon':
+                group["momentum"] = muon_momentum
+                group["weight_decay"] = muon_weight_decay
+        if GRAD_CLIP > 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
+        optimizer.step()
+        model.zero_grad(set_to_none=True)
+        if ema_model is not None:
+            with torch.no_grad():
+                for p_ema, p in zip(ema_model.parameters(), model.parameters()):
+                    p_ema.lerp_(p, 1.0 - EMA_DECAY)
+
+        train_loss_f = train_loss.item()
+
+        # Fast fail: abort if loss is exploding
+        if train_loss_f > 100:
+            print("FAIL")
+            exit(1)
+
+        sync_device(device_type)
+        t1 = time.time()
+        dt = t1 - t0
+
+        if step > 10:
+            total_training_time += dt
+
+        # Logging
+        ema_beta = 0.9
+        smooth_train_loss = ema_beta * smooth_train_loss + (1 - ema_beta) * train_loss_f
+        debiased_smooth_loss = smooth_train_loss / (1 - ema_beta**(step + 1))
+        pct_done = 100 * progress
+        tok_per_sec = int(TOTAL_BATCH_SIZE / dt)
+        mfu = 100 * num_flops_per_token * TOTAL_BATCH_SIZE / dt / H100_BF16_PEAK_FLOPS
+        remaining = max(0, TIME_BUDGET - total_training_time)
+
+        print(f"\rstep {step:05d} ({pct_done:.1f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt*1000:.0f}ms | tok/sec: {tok_per_sec:,} | mfu: {mfu:.1f}% | epoch: {epoch} | remaining: {remaining:.0f}s    ", end="", flush=True)
+
+        # GC management (Python's GC causes ~500ms stalls)
+        if step == 0:
+            gc.collect()
+            gc.freeze()
+            gc.disable()
+        elif (step + 1) % 5000 == 0:
+            gc.collect()
+
+        step += 1
+
+        # Periodic mid-training checkpoint (every CHECKPOINT_EVERY_S wall-clock seconds)
+        if time.time() - _last_ckpt_wall >= CHECKPOINT_EVERY_S:
+            _mid = {
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "step": step,
+                "total_training_time": total_training_time,
+                "smooth_train_loss": smooth_train_loss,
+            }
+            torch.save(_mid, _resume_path)
+            _last_ckpt_wall = time.time()
+            del _mid
+
+        # Time's up — but only stop after warmup steps so we don't count compilation
+        if step > 10 and total_training_time >= TIME_BUDGET:
+            break
+
+    print()  # newline after \r training log
+
+    total_tokens = step * TOTAL_BATCH_SIZE
+
+    # Final eval
+    model.eval()
+    with autocast_ctx:
+        eval_model = ema_model if ema_model is not None else model
+        val_bpb = evaluate_bpb(eval_model, tokenizer, DEVICE_BATCH_SIZE)
+
+    # Final summary
+    t_end = time.time()
+    startup_time = t_start_training - t_start
+    steady_state_mfu = 100 * num_flops_per_token * TOTAL_BATCH_SIZE * (step - 10) / total_training_time / H100_BF16_PEAK_FLOPS if total_training_time > 0 else 0
+    if device_type == "cuda":
+        peak_vram_mb = torch.cuda.max_memory_allocated() / 1024 / 1024
+    else:
+        peak_vram_mb = 0.0
+
+    print("---")
+    print(f"val_bpb:          {val_bpb:.6f}")
+    print(f"training_seconds: {total_training_time:.1f}")
+    print(f"total_seconds:    {t_end - t_start:.1f}")
+    print(f"peak_vram_mb:     {peak_vram_mb:.1f}")
+    print(f"mfu_percent:      {steady_state_mfu:.2f}")
+    print(f"total_tokens_M:   {total_tokens / 1e6:.1f}")
+    print(f"num_steps:        {step}")
+    print(f"num_params_M:     {num_params / 1e6:.1f}")
+    print(f"depth:            {DEPTH}")
+
+    # ---------------------------------------------------------------------------
+    # Save checkpoint (always overwrites; caller decides whether run was good)
+    # ---------------------------------------------------------------------------
+    import dataclasses as _dc
+    _ckpt = {
+        "model_state_dict": eval_model.state_dict(),
+        "config": _dc.asdict(config),          # full GPTConfig, enough to rebuild
+        "softcap": SOFTCAP,                    # needed in forward pass
+        "val_bpb": val_bpb,
+        "total_tokens": total_tokens,
+        "num_steps": step,
+        "time_budget_s": TIME_BUDGET,
+    }
+    _ckpt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_checkpoint.pt")
+    torch.save(_ckpt, _ckpt_path)
+    print(f"checkpoint:       {_ckpt_path}")
+
+    # Remove mid-training checkpoint now that we have a clean final checkpoint
+    if os.path.exists(_resume_path):
+        os.remove(_resume_path)
