@@ -508,12 +508,12 @@ HEAD_DIM = 128          # target head dimension for attention
 WINDOW_PATTERN = "SL"   # sliding window pattern: L=full, S=half context  [Phase 3 best]
 
 # Optimization
-TOTAL_BATCH_SIZE = 8192 # ~8K tokens per optimizer step (batch=4, ~1000 steps)
+TOTAL_BATCH_SIZE = 16384 # ~8K tokens per optimizer step (batch=4, ~1000 steps)
 EMBEDDING_LR = 0.5      # learning rate for token embeddings (Adam)
 UNEMBEDDING_LR = 0.003  # learning rate for lm_head (Adam)
 MATRIX_LR = 0.025       # learning rate for matrix parameters (Muon)
 SCALAR_LR = 0.5         # learning rate for per-layer scalars (Adam)
-WEIGHT_DECAY = 0.02     # cautious weight decay for Muon (Phase 3 best: Exp215)
+WEIGHT_DECAY = 0.04     # cautious weight decay for Muon (Phase 3 best: Exp215)
 ADAM_BETAS = (0.76, 0.98) # Adam beta1, beta2
 MUON_BETA2 = 0.93        # Muon second moment EMA rate (Phase 3 best: Exp215)
 MUON_NS_STEPS = 5        # Newton-Schulz steps for Muon (default 5)
