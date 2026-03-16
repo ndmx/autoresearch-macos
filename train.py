@@ -503,7 +503,7 @@ class MuonAdamW(torch.optim.Optimizer):
 # ---------------------------------------------------------------------------
 
 # Model architecture
-ASPECT_RATIO = 64       # model_dim = depth * ASPECT_RATIO
+ASPECT_RATIO = 85       # model_dim = depth * ASPECT_RATIO
 HEAD_DIM = 128          # target head dimension for attention
 WINDOW_PATTERN = "SL"   # sliding window pattern: L=full, S=half context  [Phase 3 best]
 
@@ -533,7 +533,7 @@ EMA_DECAY = 0.0         # EMA weight averaging decay (0 = disabled; 0.99 = 100-s
 PARALLEL_ATTN = False   # PaLM-style parallel attn+MLP: x = x + attn(norm(x)) + mlp(norm(x))
 
 # Model size
-DEPTH = 3               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
+DEPTH = 5               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
 DEVICE_BATCH_SIZE = 4   # per-device batch size (reduce if OOM)
 
 # Checkpoint resume
