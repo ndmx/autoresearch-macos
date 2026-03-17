@@ -503,7 +503,7 @@ class MuonAdamW(torch.optim.Optimizer):
 # ---------------------------------------------------------------------------
 
 # Model architecture
-ASPECT_RATIO = 85       # model_dim = depth * ASPECT_RATIO
+ASPECT_RATIO = 128       # model_dim = depth * ASPECT_RATIO
 HEAD_DIM = 128          # target head dimension for attention
 WINDOW_PATTERN = "SL"   # sliding window pattern: L=full, S=half context  [Phase 3 best]
 
@@ -526,14 +526,14 @@ LABEL_SMOOTHING = 0.0   # cross-entropy label smoothing (0 = disabled)
 MLP_RATIO = 4           # MLP hidden dimension multiplier (default 4x)
 VE_GATE_CHANNELS = 32   # value embedding gate channels (default 32)
 ROPE_BASE = 10000       # RoPE positional encoding base frequency (default 10000)
-N_KV_HEAD = 2           # number of KV heads (1=MQA, =n_head for MHA)
+N_KV_HEAD = 5           # number of KV heads (1=MQA, =n_head for MHA)
 DROPOUT = 0.0           # residual dropout rate (0 = disabled)
 SWIGLU = False          # SwiGLU MLP: silu(W1*x) * gate(x) instead of relu²(W1*x)
 EMA_DECAY = 0.0         # EMA weight averaging decay (0 = disabled; 0.99 = 100-step window)
 PARALLEL_ATTN = False   # PaLM-style parallel attn+MLP: x = x + attn(norm(x)) + mlp(norm(x))
 
 # Model size
-DEPTH = 6               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
+DEPTH = 5               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
 DEVICE_BATCH_SIZE = 4   # per-device batch size (reduce if OOM)
 
 # Checkpoint resume
