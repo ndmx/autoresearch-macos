@@ -533,7 +533,7 @@ EMA_DECAY = 0.0         # EMA weight averaging decay (0 = disabled; 0.99 = 100-s
 PARALLEL_ATTN = False   # PaLM-style parallel attn+MLP: x = x + attn(norm(x)) + mlp(norm(x))
 
 # Model size
-DEPTH = 5               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
+DEPTH = 6               # number of transformer layers  [Phase 3 best: fewer layers = more steps]
 DEVICE_BATCH_SIZE = 4   # per-device batch size (reduce if OOM)
 
 # Checkpoint resume
